@@ -161,13 +161,56 @@ def appeler_gemini(contenu, tentative_max=3):
 
 st.title("🏗️ CADS-UP Mobile")
 
-onglet_pic, onglet_cctp, onglet_cadrage, onglet_audit, onglet_email = st.tabs([
-    "🗺️ PIC", 
-    "📄 CCTP", 
-    "📐 Cadrage",
-    "⚖️ Audit", 
-    "✉️ E-mail"
-])
+# =========================================================
+# ONGLET 6 : RENDU 3D CONCEPTUEL
+# =========================================================
+with onglet_3d:
+    st.subheader("Génération de Vue 3D Isométrique (Intention)")
+    st.warning("⚠️ L'IA génère une illustration visuelle conceptuelle. Ce n'est en aucun cas une maquette BIM précise ou à l'échelle.")
+
+    fichier_plan_3d = st.file_uploader("Importer le plan 2D (Image) :", type=['png', 'jpg', 'jpeg'], key="upload_3d")
+
+    if fichier_plan_3d:
+        image_2d = PIL.Image.open(fichier_plan_3d)
+        st.image(image_2d, caption="Plan 2D source", use_container_width=True)
+
+        if st.button("Générer l'illustration 3D", use_container_width=True):
+            with st.spinner("Étape 1/2 : Analyse spatiale du plan par l'IA..."):
+                # 1. Gemini traduit le plan 2D en description textuelle détaillée
+                prompt_analyse = """
+                Analyse ce plan d'installation de chantier. Rédige un prompt (en anglais) très détaillé pour un générateur d'images IA.
+                Décris précisément : les positions relatives, la grue, la base vie, les accès, les zones de stockage.
+                Demande ce style exact : "Isometric 3D architectural render, construction site layout, highly detailed, realistic materials, clean lighting, white background, tilt-shift photography, unreal engine 5 render."
+                Ne renvoie QUE le texte du prompt en anglais, aucune autre phrase.
+                """
+                rep_description = appeler_gemini([image_2d, prompt_analyse])
+
+            if rep_description and rep_description.text:
+                prompt_image = rep_description.text.strip()
+                st.info("Description générée avec succès. Lancement du moteur de rendu 3D...")
+
+                with st.spinner("Étape 2/2 : Génération de l'image (Imagen 3)..."):
+                    try:
+                        # 2. Appel au modèle de génération d'images Imagen 3
+                        resultat_image = client.models.generate_images(
+                            model='imagen-3.0-generate-001',
+                            prompt=prompt_image,
+                            config=dict(
+                                number_of_images=1,
+                                output_mime_type="image/jpeg",
+                                aspect_ratio="16:9"
+                            )
+                        )
+                        
+                        # Affichage de l'image
+                        for image_generee in resultat_image.generated_images:
+                            image_bytes = image_generee.image.image_bytes
+                            image_3d = PIL.Image.open(io.BytesIO(image_bytes))
+                            st.image(image_3d, caption="Rendu 3D Isométrique d'intention", use_container_width=True)
+                            
+                    except Exception as e:
+                        st.error("❌ Échec du rendu 3D. Le modèle Imagen n'est probablement pas activé pour ta clé API.")
+                        st.error(f"Détail technique : {e}")
 
 # =========================================================
 # ONGLET 1 : ANALYSE DU PIC (PHOTO OU FICHIER)
