@@ -151,7 +151,7 @@ except Exception as e:
 def appeler_gemini(contenu, tentative_max=3):
     for i in range(tentative_max):
         try:
-            return client.models.generate_content(model='gemini-2.5-flash', contents=contenu)
+            return client.models.generate_content(model='gemini-3.6-flash', contents=contenu)
         except Exception as e:
             if "503" in str(e) and i < tentative_max - 1:
                 time.sleep(2)
