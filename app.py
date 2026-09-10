@@ -256,13 +256,11 @@ with onglet_email:
                 if rep: st.text_area("Résultat :", rep.text, height=250)
 
 # =========================================================
-# ONGLET 6 : RENDU 3D (VIA HUGGING FACE - GRATUIT)
+# ONGLET 6 : RENDU 3D (VIA GOOGLE IMAGEN 3)
 # =========================================================
-import requests
-
 with onglet_3d:
     st.subheader("Génération de Vue 3D Isométrique (Intention)")
-    st.warning("⚠️ Outil de visualisation conceptuelle. API gratuite (Hugging Face) : le modèle peut mettre du temps à démarrer (Erreur 503 possible au premier essai).")
+    st.warning("⚠️ Outil de visualisation conceptuelle. L'image générée n'a pas d'échelle métrique.")
     
     fichier_plan_3d = st.file_uploader("Importer le plan 2D (Image) :", type=['png', 'jpg', 'jpeg'], key="upload_3d")
 
@@ -271,14 +269,9 @@ with onglet_3d:
         st.image(image_2d, caption="Plan 2D source", use_container_width=True)
 
         if st.button("Générer l'illustration 3D", use_container_width=True):
-            hf_token = st.secrets.get("HF_TOKEN")
-            if not hf_token:
-                st.error("❌ Le token HF_TOKEN n'est pas configuré dans les secrets.")
-                st.stop()
-                
-            with st.spinner("Étape 1/2 : Analyse spatiale du plan (Gemini)..."):
+            with st.spinner("Étape 1/2 : Analyse spatiale du plan (Gemini 3.6)..."):
                 prompt_analyse = """
-                Analyse ce plan d'installation de chantier. Rédige un prompt (en anglais) très détaillé pour le générateur d'images Stable Diffusion.
+                Analyse ce plan d'installation de chantier. Rédige un prompt (en anglais) très détaillé pour le générateur d'images Imagen.
                 Décris précisément : les positions relatives, la grue, la base vie, les accès, les zones de stockage.
                 Demande ce style exact : "Isometric 3D architectural render, construction site layout, highly detailed, realistic materials, clean lighting, white background, tilt-shift photography, unreal engine 5 render."
                 Ne renvoie QUE le texte du prompt en anglais, aucune autre phrase.
@@ -286,29 +279,27 @@ with onglet_3d:
                 rep_description = appeler_gemini([image_2d, prompt_analyse])
             
             if rep_description and rep_description.text:
-                prompt_image = rep_description.text.strip()
-                st.info("Description générée. Étape 2/2 : Lancement du rendu (Stable Diffusion XL)...")
-                
-                with st.spinner("Génération de l'image (Patientez, le modèle gratuit peut prendre jusqu'à 60s pour se réveiller)..."):
-                    # API de Hugging Face pour Stable Diffusion XL
-                    API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
-                    headers = {"Authorization": f"Bearer {hf_token}"}
-                    
+                st.info("Description générée. Étape 2/2 : Lancement du rendu (Imagen 3)...")
+                with st.spinner("Génération de l'image en cours..."):
                     try:
-                        # Boucle pour gérer le "réveil" du modèle gratuit
-                        for tentative in range(3):
-                            reponse_hf = requests.post(API_URL, headers=headers, json={"inputs": prompt_image})
+                        # Appel direct au modèle Imagen 3 avec le même client que Gemini
+                        resultat_image = client.models.generate_images(
+                            model='imagen-3.0-generate-001',
+                            prompt=rep_description.text.strip(),
+                            config=dict(
+                                number_of_images=1, 
+                                output_mime_type="image/jpeg", 
+                                aspect_ratio="16:9"
+                            )
+                        )
+                        
+                        # Récupération et affichage de la première image générée
+                        for img in resultat_image.generated_images:
+                            image_bytes = img.image.image_bytes
+                            image_3d = PIL.Image.open(io.BytesIO(image_bytes))
+                            st.image(image_3d, caption="Rendu 3D conceptuel généré par Imagen 3", use_container_width=True)
                             
-                            if reponse_hf.status_code == 200:
-                                image_3d = PIL.Image.open(io.BytesIO(reponse_hf.content))
-                                st.image(image_3d, caption="Rendu 3D généré via Stable Diffusion XL", use_container_width=True)
-                                break
-                            elif reponse_hf.status_code == 503:
-                                st.warning("Le modèle est en cours de chargement sur le serveur. Nouvelle tentative dans 10 secondes...")
-                                time.sleep(10)
-                            else:
-                                st.error(f"❌ Erreur de l'API Hugging Face : {reponse_hf.status_code}")
-                                st.error(reponse_hf.text)
-                                break
                     except Exception as e:
-                        st.error(f"❌ Échec de la connexion à Hugging Face : {e}")
+                        st.error("❌ Échec du rendu. Ton accès réseau fonctionne, mais Google refuse la génération d'images.")
+                        st.error(f"Détail : {e}")
+                        st.info("Explication logique : Ta clé API gratuite Gemini n'a peut-être pas les droits activés pour utiliser le modèle Imagen. Il faut passer sur un projet Google Cloud Platform lié à une carte bancaire pour débloquer cette fonction.")
